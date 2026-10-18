@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-10-18
 
 The first release: the server [The catalog is the API](https://cordata.tech/en/blog/governed-mesh-over-mcp) describes, running over `cordata-pipeline-runtime`'s example catalog.
 
