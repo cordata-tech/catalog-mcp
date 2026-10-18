@@ -1,6 +1,8 @@
 # cordata-catalog-mcp
 
-A read-only [Model Context Protocol](https://modelcontextprotocol.io) server that answers questions *about* datasets — who owns them, what columns they have, how those columns are classified, and whether a Lake Formation grant would reach them — and never returns a row of the data itself. It is the runnable version of [The catalog is the API — a governed mesh over MCP](https://cordata.tech/en/blog/governed-mesh-over-mcp), and it serves the example catalog that ships with [`cordata-pipeline-runtime`](https://pypi.org/project/cordata-pipeline-runtime/).
+A read-only [Model Context Protocol](https://modelcontextprotocol.io) server that answers questions *about* datasets — who owns them, what columns they have, how those columns are classified, and whether a Lake Formation grant would reach them — and never returns a row of the data itself. It serves the example catalog that ships with [`cordata-pipeline-runtime`](https://pypi.org/project/cordata-pipeline-runtime/).
+
+It is the runnable version of a design written up in two posts on cordata.tech. [Fabric + Mesh on AWS — LakeFormation, DataZone, and one governance plane](https://cordata.tech/en/blog/fabric-mesh-on-aws) lays out the reference topology this server is modelled on, with one AWS account per data domain and a governance account that owns the LF-tag ontology and the grants, and closes its [§ 3](https://cordata.tech/en/blog/fabric-mesh-on-aws#s3) by proposing an MCP catalog tool. [The catalog is the API — a governed mesh over MCP](https://cordata.tech/en/blog/governed-mesh-over-mcp) designs that tool: which questions it answers and where its schemas come from, why read-only has to be enforced rather than annotated, and how authorization works. Where this README says "§ N of the post", it means that second post.
 
 Verified against MCP revision **`2026-07-28`**, the Python SDK **`mcp` 2.3**, and `cordata-pipeline-runtime` **0.2**. MCP has changed substantially between revisions, so check those three numbers before trusting a detail below against a newer stack.
 
@@ -53,7 +55,7 @@ Ownership, contracts and the ontology all come from `cordata-pipeline-runtime`. 
 
 ## The IBAN question, on this example
 
-The post opens with a domain engineer who is tagging a new column and asks which sensitivity level applies to one holding an EU IBAN. The answer should come from how comparable columns are already classified, not from what a model knows about IBANs. Against this example, it goes like this.
+[§ 1 of the post](https://cordata.tech/en/blog/governed-mesh-over-mcp#s1) opens with a domain engineer who is tagging a new column and asks which sensitivity level applies to one holding an EU IBAN. The answer should come from how comparable columns are already classified, not from what a model knows about IBANs. Against this example, it goes like this.
 
 **Find the precedent.** `find_datasets` with `{"subject_type": "customer"}` returns two datasets that hold customer data, `fraud/transactions_scored` and `policy/claims_deduped`, each with an IBAN column. `get_dataset` on the first shows how that column is tagged and who to ask about it:
 
@@ -77,13 +79,13 @@ The post opens with a domain engineer who is tagging a new column and asks which
 lf_tag residency='eea' is not in the ontology; allowed: ['eu', 'ch', 'us', 'global']
 ```
 
-Validation catches a value nobody defined; it cannot catch a legal value that is wrong for this column. `residency` records where the *data* is stored, so an IBAN column in an extract replicated across regions should be `global`, and `resolve_lf_tag` accepts `eu` and `global` alike. That is the failure the post describes in § 1, and the reason the precedent lookup comes first.
+Validation catches a value nobody defined; it cannot catch a legal value that is wrong for this column. `residency` records where the *data* is stored, so an IBAN column in an extract replicated across regions should be `global`, and `resolve_lf_tag` accepts `eu` and `global` alike. That is the failure [§ 1](https://cordata.tech/en/blog/governed-mesh-over-mcp#s1) describes, and the reason the precedent lookup comes first.
 
-**Check who could read it.** The analyst role in the reference topology may read every sensitivity except `high`. `check_grant_expression` with that role's expression, `{"domain": ["fraud"], "sensitivity": ["public", "internal", "confidential"], "residency": ["eu"]}`, returns `{"reaches": false, "columns": []}` for `transactions_scored`. In this example the whole table is classified `high`, so the role reaches nothing in it. The reference topology tags only the `iban` column of its customer table `high`, and there the same role sees the table with the IBAN column left out. The IBAN columns here carry their own `high` tag as well, so that they stay `high` if a table's classification is ever lowered.
+**Check who could read it.** The analyst role in the [reference topology](https://cordata.tech/en/blog/fabric-mesh-on-aws#s3) may read every sensitivity except `high`. `check_grant_expression` with that role's expression, `{"domain": ["fraud"], "sensitivity": ["public", "internal", "confidential"], "residency": ["eu"]}`, returns `{"reaches": false, "columns": []}` for `transactions_scored`. In this example the whole table is classified `high`, so the role reaches nothing in it. The reference topology's Terraform tags only the `iban` column of its customer table `high`, and there the same role sees the table with the IBAN column left out. The IBAN columns here carry their own `high` tag as well, so that they stay `high` if a table's classification is ever lowered.
 
 ## Read-only, and how that is enforced
 
-Every tool carries `readOnlyHint: true`, but § 4 of the post argues that annotation is display metadata and enforces nothing. What enforces it here is that no handler writes: there is no write path to remove, the catalog is loaded once into an immutable mapping, and every object it hands out is a frozen Pydantic model. The tests call a write tool that does not exist and check that it returns an error and that the next read is unchanged.
+Every tool carries `readOnlyHint: true`, but [§ 4 of the post](https://cordata.tech/en/blog/governed-mesh-over-mcp#s4) argues that annotation is display metadata and enforces nothing. What enforces it here is that no handler writes: there is no write path to remove, the catalog is loaded once into an immutable mapping, and every object it hands out is a frozen Pydantic model. The tests call a write tool that does not exist and check that it returns an error and that the next read is unchanged.
 
 ## Serving it over HTTP
 
@@ -94,7 +96,7 @@ uvx cordata-catalog-mcp --http --issuer https://idp.example --public-key issuer.
 
 Over HTTP every request needs a bearer token: a JWT access token in the [RFC 9068](https://www.rfc-editor.org/rfc/rfc9068) shape, signed ES256 by the one issuer named with `--issuer`, whose audience is this server's own URL (`--resource-url`, by default `http://HOST:PORT/mcp`). A token minted for any other resource is refused, which is the [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707) audience binding the MCP authorization spec requires, and the server never passes a token on to anything else.
 
-Access is per domain. A token needs `catalog:read` to reach the server at all, and `catalog:{domain}:read` for each domain it may see — `catalog:fraud:read`, for example. The responses follow § 5 of the post:
+Access is per domain. A token needs `catalog:read` to reach the server at all, and `catalog:{domain}:read` for each domain it may see — `catalog:fraud:read`, for example. The responses follow [§ 5 of the post](https://cordata.tech/en/blog/governed-mesh-over-mcp#s5):
 
 - **No token, or an invalid one**: `401`, with a `WWW-Authenticate` header whose `resource_metadata` points at `/.well-known/oauth-protected-resource/mcp`. That document is the [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) protected-resource metadata, and it names the issuer a client should get a token from.
 - **A request for a domain the token has no scope for**: `403`, with `error="insufficient_scope"` and `scope="catalog:{domain}:read"`, so the client knows which scope to ask for. The server does not answer with an empty result, which a client could not tell apart from a dataset with nothing in it.
