@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "The local stand-in for each domain's Glue catalog: the one part of a dataset",
+    "the descriptor does not carry. Columns are what each example pipeline's SQL",
+    "produces; CI runs those pipelines and fails if a column list here differs",
+    "from the Parquet they write. lf_tags on a column override the table's tags",
+    "for that key, as LakeFormation column tags do, and every value is checked",
+    "against the runtime's ontology when the catalog loads. The IBAN columns carry",
+    "an explicit tag, as the fabric-mesh-on-aws Terraform tags policy.customer.iban.",
+    "Both tables are already sensitivity=high, so today the column tag repeats the",
+    "table's; it keeps the IBAN high if the table's classification is ever lowered."
+  ],
+  "fraud/transactions_scored": [
+    {"name": "tx_id", "type": "VARCHAR"},
+    {"name": "account_id", "type": "VARCHAR"},
+    {"name": "iban", "type": "VARCHAR", "lf_tags": {"sensitivity": "high"}},
+    {"name": "amount_eur", "type": "DOUBLE"},
+    {"name": "currency", "type": "VARCHAR"},
+    {"name": "booked_at", "type": "TIMESTAMP"},
+    {"name": "merchant_id", "type": "VARCHAR"},
+    {"name": "model_version", "type": "VARCHAR"},
+    {"name": "scored_date", "type": "DATE"},
+    {"name": "fraud_score", "type": "DOUBLE"}
+  ],
+  "policy/claims_deduped": [
+    {"name": "claim_id", "type": "VARCHAR"},
+    {"name": "policy_id", "type": "VARCHAR"},
+    {"name": "claimant_iban", "type": "VARCHAR", "lf_tags": {"sensitivity": "high"}},
+    {"name": "amount_eur", "type": "DOUBLE"},
+    {"name": "reported_at", "type": "TIMESTAMP"},
+    {"name": "status", "type": "VARCHAR"},
+    {"name": "ingest_date", "type": "DATE"}
+  ],
+  "finance/merchant_settlement_daily": [
+    {"name": "merchant_id", "type": "VARCHAR"},
+    {"name": "settlement_date", "type": "DATE"},
+    {"name": "tx_count", "type": "BIGINT"},
+    {"name": "amount_eur", "type": "DOUBLE"}
+  ]
+}

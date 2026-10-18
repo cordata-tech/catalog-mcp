@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cordata-catalog-mcp"
+version = "0.1.0"
+description = "A read-only MCP server over a governed data catalog — the runnable version of cordata.tech's 'catalog is the API' post"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{ name = "Cordata", email = "hello@cordata.tech" }]
+dependencies = [
+    # The descriptor model, the policy resolution and the example data — the
+    # base install, with no execution stack. Never the bare `pipeline-runtime`,
+    # which is an unrelated package on PyPI.
+    "cordata-pipeline-runtime>=0.2,<0.3",
+    # 2.x speaks the 2026-07-28 revision; 2.3 is the version this was verified against.
+    "mcp>=2.3,<3",
+    "pyjwt[crypto]>=2.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "httpx>=0.27"]
+
+[project.scripts]
+cordata-catalog-mcp = "catalog_mcp.__main__:main"
+
+[project.urls]
+Homepage = "https://cordata.tech"
+Source = "https://github.com/cordata-tech/catalog-mcp"
+Changelog = "https://github.com/cordata-tech/catalog-mcp/blob/main/CHANGELOG.md"
+Issues = "https://github.com/cordata-tech/catalog-mcp/issues"
+"The post" = "https://cordata.tech/en/blog/governed-mesh-over-mcp"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+catalog_mcp = ["columns.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

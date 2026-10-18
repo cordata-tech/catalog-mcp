@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # The runtime is pinned to a minor range, so a new patch release reaches this
+  # server without a commit here. The weekly run is what notices if it changed
+  # a column.
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # Not editable: the tests run against the installed package, which is
+      # what `uvx` runs, so a file missing from the wheel fails here.
+      - name: Install
+        run: pip install ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Test
+        run: pytest -q
+
+  # columns.json is declared by hand. This runs the runtime's example pipelines
+  # at the version installed here and compares the Parquet they write with it.
+  columns:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install, with the runtime's execution stack
+        run: |
+          pip install .
+          version=$(pip show cordata-pipeline-runtime | sed -n 's/^Version: //p')
+          pip install "cordata-pipeline-runtime[run]==${version}"
+          echo "RUNTIME_VERSION=${version}" >> "$GITHUB_ENV"
+
+      # The seed script is in the runtime's repository, not its wheel.
+      - name: Clone the runtime at that version
+        run: git clone --depth 1 --branch "v${RUNTIME_VERSION}" https://github.com/cordata-tech/pipeline-runtime runtime
+
+      - name: Run the example pipelines
+        working-directory: runtime
+        run: |
+          python -m tools.seed --clean
+          python -m pipeline_runtime example/domains/fraud/pipelines/transactions_scored.yml
+          python -m pipeline_runtime example/domains/policy/pipelines/claims_ingest.yml
+          python -m pipeline_runtime example/domains/finance/pipelines/merchant_settlement.yml
+
+      - name: columns.json matches what they wrote
+        run: CORDATA_WAREHOUSE=runtime/example/warehouse python -m tools.check_columns
