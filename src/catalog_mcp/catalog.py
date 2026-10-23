@@ -40,15 +40,39 @@ class Column(_Frozen):
     lf_tags: dict[str, str]
 
 
+class Lineage(_Frozen):
+    """How the runtime's OpenLineage events name this dataset.
+
+    OpenLineage identifies a dataset by namespace and name, so a lineage reader
+    beside this server — `qedro`, a Marquez instance — can match what it holds
+    against these two strings and nothing else.
+    """
+
+    namespace: str
+    name: str
+
+
 class Dataset(_Frozen):
     # The governance-owned halves are the runtime's models, not copies of them.
     metadata: v1.Metadata
     contract: v1.Contract
     columns: list[Column]
+    lineage: Lineage
 
 
-def _descriptor(raw: dict) -> tuple[v1.Metadata, str, v1.Contract]:
-    """(metadata, table, contract) from a v1 or v2 descriptor.
+def lineage_of(domain: str, target: v1.TableRef) -> Lineage:
+    """The identity the runtime emits for a table that `domain` owns.
+
+    The runtime's rule, from `emit.dataset()`: the namespace is the owning
+    domain and the name is `database.table`. Restated here because importing
+    `emit` would pull in the `run` extra; `tools/check_lineage.py` and the tests
+    hold it to events the runtime actually wrote.
+    """
+    return Lineage(namespace=f"cordata://{domain}", name=target.fqn)
+
+
+def _descriptor(raw: dict) -> tuple[v1.Metadata, v1.TableRef, v1.Contract]:
+    """(metadata, target, contract) from a v1 or v2 descriptor.
 
     Dispatches on `apiVersion` as the executor does, without importing the
     executor, which would pull in the `run` extra this package does not need.
@@ -56,11 +80,11 @@ def _descriptor(raw: dict) -> tuple[v1.Metadata, str, v1.Contract]:
     api = raw.get("apiVersion")
     if api == "cordata.tech/v1":
         d1 = v1.Descriptor.model_validate(raw)
-        return d1.metadata, d1.target.table, d1.contract
+        return d1.metadata, d1.target, d1.contract
     if api == "cordata.tech/v2":
         d2 = v2.Descriptor.model_validate(raw)
         contract = v1.Contract.model_validate(d2.target.contract.model_dump())
-        return d2.metadata, d2.target.table, contract
+        return d2.metadata, d2.target, contract
     raise ValueError(f"unknown apiVersion {api!r}")
 
 
@@ -89,9 +113,10 @@ class Catalog:
             for path in sorted(pipelines.iterdir(), key=lambda p: p.name):
                 if not path.name.endswith((".yml", ".yaml")):
                     continue
-                metadata, table, contract = _descriptor(
+                metadata, target, contract = _descriptor(
                     yaml.safe_load(path.read_text(encoding="utf-8"))
                 )
+                table = target.table
                 key = f"{metadata.domain}/{table}"
                 if key not in stand_in:
                     raise ValueError(f"{key} has no columns in columns.json")
@@ -107,7 +132,10 @@ class Catalog:
                     for c in stand_in.pop(key)
                 ]
                 datasets[(metadata.domain, table)] = Dataset(
-                    metadata=metadata, contract=contract, columns=cols
+                    metadata=metadata,
+                    contract=contract,
+                    columns=cols,
+                    lineage=lineage_of(metadata.domain, target),
                 )
         if stand_in:
             raise ValueError(

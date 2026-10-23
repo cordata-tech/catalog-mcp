@@ -27,7 +27,7 @@ async def test_the_five_tools_and_nothing_else(client):
 async def test_output_schemas_come_from_the_runtimes_models(client):
     tools = {t.name: t for t in (await client.list_tools()).tools}
     schema = tools["get_dataset"].output_schema
-    assert set(schema["properties"]) == {"metadata", "contract", "columns"}
+    assert set(schema["properties"]) == {"metadata", "contract", "columns", "lineage"}
     # Derived from pipeline_runtime.descriptor, not restated: the field names
     # and the "forbid extras" posture are the runtime's.
     assert {"Metadata", "Contract"} <= set(schema["$defs"])

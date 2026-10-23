@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 — unreleased
+
+**`get_dataset`'s result gains a `lineage` field**, and so does the dataset resource:
+the namespace and name the runtime's OpenLineage events use for that dataset, for
+example `cordata://fraud` and `fraud_curated.transactions_scored`. A lineage reader
+beside this server can match datasets on them; this server's own `cordata://domain/…`
+URIs carry no database and could not be matched (#1).
+
+The mapping restates the runtime's naming rule, so the tests check it against events
+`cordata-pipeline-runtime` 0.2.2 emitted, and CI checks it against a fresh run of the
+installed version. The server still reads no OpenLineage events.
+
 ## 0.1.0 — 2026-10-18
 
 The first release: the server [The catalog is the API](https://cordata.tech/en/blog/governed-mesh-over-mcp) describes, running over `cordata-pipeline-runtime`'s example catalog.

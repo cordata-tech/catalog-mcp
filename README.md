@@ -53,6 +53,18 @@ Two resources sit beside the tools: the ontology as `cordata://ontology/lf-tags`
 
 Ownership, contracts and the ontology all come from `cordata-pipeline-runtime`. Column lists do not, because a pipeline descriptor does not carry one: in a deployment they live in each domain's Glue catalog. Here [`columns.json`](src/catalog_mcp/columns.json) stands in for that catalog. Each column's tags are checked against the ontology when the server starts, and CI runs the runtime's three example pipelines and fails if a column name or type in `columns.json` differs from the Parquet they write.
 
+### Matching the runtime's lineage
+
+This server names a dataset by its resource URI, `cordata://domain/fraud/dataset/transactions_scored`. The runtime's OpenLineage events name the same table by a namespace and a name, `cordata://fraud` and `fraud_curated.transactions_scored`, because OpenLineage identifies a dataset by that pair and the name carries the database. The two forms differ, so every dataset `get_dataset` returns also carries the lineage form:
+
+```json
+"lineage": {"namespace": "cordata://fraud", "name": "fraud_curated.transactions_scored"}
+```
+
+An agent connected to this server and to a lineage reader such as `qedro` or Marquez can match datasets on those two strings, without either server reading the other. The rule behind them is the runtime's: the namespace is the domain that owns the table and the name is `database.table`. Since `cordata-pipeline-runtime` 0.2.2 that holds for a table a pipeline reads as well as for one it writes ([pipeline-runtime#7](https://github.com/cordata-tech/pipeline-runtime/issues/7)), so `fraud_raw.transactions` has one identity whichever domain reads it.
+
+The rule is restated here rather than imported, because the runtime keeps it in its execution stack, which this package does not install. The tests hold the restatement to events a runtime release actually emitted (`tests/fixtures/`), and CI holds it to the events from a fresh run of the installed version. The server itself still reads no OpenLineage events.
+
 ## The IBAN question, on this example
 
 [§ 1 of the post](https://cordata.tech/en/blog/governed-mesh-over-mcp#s1) opens with a domain engineer who is tagging a new column and asks which sensitivity level applies to one holding an EU IBAN. The answer should come from how comparable columns are already classified, not from what a model knows about IBANs. Against this example, it goes like this.
