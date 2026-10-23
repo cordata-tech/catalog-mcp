@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — unreleased
+## 0.2.0 — 2026-10-23
 
 **`get_dataset`'s result gains a `lineage` field**, and so does the dataset resource:
 the namespace and name the runtime's OpenLineage events use for that dataset, for

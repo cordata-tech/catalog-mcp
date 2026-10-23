@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cordata-catalog-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "A read-only MCP server over a governed data catalog — the runnable version of cordata.tech's 'catalog is the API' post"
 readme = "README.md"
 license = "MIT"
