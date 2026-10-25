@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0 — unreleased
+
+**A sixth tool, `get_consumers`**, answers which pipelines declare that they read a
+table, with each one's owner, domain and pinned schema version (#2). The list comes
+from `pipeline_runtime.pins.readers()`, the function the runtime's producer-side
+check builds its report from, so this server does not derive it a second time. That
+function moved to the runtime's base install in 0.2.9, which is now the minimum
+version. Consumers in domains the caller has no scope for are listed too, because a
+producer that sees only part of the list can break the pipelines it does not see.
+Readers that declare nothing are absent, and the server still reads no OpenLineage
+events.
+
+**Source tables join the catalog.** `fraud_raw.transactions` and `policy_raw.claims`
+are what every example pipeline reads, so without them `get_consumers` would have
+returned nothing for every table the server knew. `columns.json` now holds their
+owning domain, schema version and columns, and the CI columns job checks all three
+against the runtime's seeded catalog. A source table carries no LF-tag besides
+`domain`, and `get_consumers` shows it as `classified: false` rather than borrowing
+the tags of the pipelines that read it. `list_domains` gains a `sources` field naming
+the source tables each domain owns. `get_dataset`, `check_grant_expression` and
+`find_datasets` still cover published datasets only, and their output is unchanged.
+
+Descriptors are now parsed with `pins.load()` instead of a dispatch on `apiVersion`
+written here.
+
 ## 0.2.0 — 2026-10-23
 
 **`get_dataset`'s result gains a `lineage` field**, and so does the dataset resource:

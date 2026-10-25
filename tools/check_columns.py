@@ -1,12 +1,16 @@
-"""Fail if `columns.json` disagrees with the Parquet the example pipelines write.
+"""Fail if `columns.json` disagrees with what the runtime's example actually holds.
 
 `columns.json` stands in for each domain's Glue catalog, which a real
-deployment would read rather than declare. Declared by hand, it can drift from
-what the pipelines actually produce, so CI runs the runtime's pipelines and
-compares column names and types with this.
+deployment would read rather than declare. Declared by hand, it can drift, so CI
+runs the runtime's pipelines and compares it with two things:
 
-Needs the runtime's `run` extra (DuckDB, pandas) and a warehouse the pipelines
-have written to; `CORDATA_WAREHOUSE` points at it, as it does for the runtime.
+- each dataset's column names and types with the Parquet its pipeline wrote;
+- each source table's domain, version, columns and tags with the runtime's
+  seeded catalog, which is what the pipelines resolved their pins against.
+
+Needs the runtime's `run` extra (DuckDB, pandas), a warehouse the pipelines have
+written to and the catalog the seed wrote; `CORDATA_WAREHOUSE` and
+`CORDATA_CATALOG` point at them, as they do for the runtime.
 
     python -m tools.check_columns
 """
@@ -19,6 +23,7 @@ from importlib.resources import files
 
 import duckdb
 import yaml
+from pipeline_runtime import catalog
 from pipeline_runtime import descriptor as v1
 from pipeline_runtime import descriptor_v2 as v2
 from pipeline_runtime.backends.local import local_path
@@ -55,13 +60,46 @@ def written() -> dict[str, dict[str, str]]:
     return found
 
 
+def _stand_in() -> dict:
+    return json.loads((files("catalog_mcp") / "columns.json").read_text(encoding="utf-8"))
+
+
 def declared() -> dict[str, dict[str, str]]:
-    raw = json.loads((files("catalog_mcp") / "columns.json").read_text(encoding="utf-8"))
     return {
         key: {c["name"]: c["type"] for c in columns}
-        for key, columns in raw.items()
-        if not key.startswith("_")
+        for key, columns in _stand_in().items()
+        if not key.startswith("_") and key != "sources"
     }
+
+
+def source_problems() -> list[str]:
+    """Each declared source table against the catalog the seed wrote."""
+    problems = []
+    for fqn, entry in sorted(_stand_in().get("sources", {}).items()):
+        database, table = fqn.split(".")
+        ref = v1.TableRef(database=database, table=table)
+        with catalog.connect(read_only=True) as con:
+            version = catalog.current_version(con, ref)
+            seeded = {c.name: c.type for c in catalog.columns_at(con, ref, entry["schema_version"])}
+        if version != entry["schema_version"]:
+            problems.append(
+                f"{fqn}: columns.json says v{entry['schema_version']}, the catalog is at v{version}"
+            )
+        want = {c["name"]: c["type"] for c in entry["columns"]}
+        for name in sorted(want.keys() | seeded.keys()):
+            if want.get(name) != seeded.get(name):
+                problems.append(
+                    f"{fqn}.{name}: columns.json says {want.get(name)}, "
+                    f"the catalog holds {seeded.get(name)}"
+                )
+        # The server shows a source table with no tag but `domain` as
+        # unclassified, so a classification the catalog gained has to fail here.
+        tags = catalog.tags_for(ref)
+        if tags != {"domain": entry["domain"]}:
+            problems.append(
+                f"{fqn}: columns.json says domain={entry['domain']} only, the catalog tags {tags}"
+            )
+    return problems
 
 
 def main() -> int:
@@ -75,10 +113,14 @@ def main() -> int:
                     f"{key}.{name}: columns.json says {want.get(name)}, "
                     f"the pipeline writes {got.get(name)}"
                 )
+    problems += source_problems()
     for line in problems:
         print(line, file=sys.stderr)
     if not problems:
-        print(f"columns.json matches the Parquet for {len(actual)} datasets")
+        print(
+            f"columns.json matches the Parquet for {len(actual)} datasets "
+            f"and the catalog for {len(_stand_in().get('sources', {}))} source tables"
+        )
     return 1 if problems else 0
 
 

@@ -45,7 +45,10 @@ def test_a_wrong_rule_would_be_caught(tmp_path):
         EVENTS.read_text(encoding="utf-8").replace('"cordata://fraud"', '"cordata.fraud"'),
         encoding="utf-8",
     )
-    assert any(p.startswith("fraud/transactions_scored") for p in unmatched(Catalog(), wrong))
+    problems = unmatched(Catalog(), wrong)
+    assert any(p.startswith("fraud/transactions_scored") for p in problems)
+    # The source table is held to the events' inputs, so it is caught as well.
+    assert any(p.startswith("fraud/transactions:") for p in problems)
     assert ("cordata.fraud", "fraud_curated.transactions_scored") in produced(wrong)
 
 

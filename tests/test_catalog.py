@@ -104,3 +104,47 @@ def test_a_column_tag_outside_the_ontology_fails_to_load(tmp_path):
 
     with pytest.raises(UnknownTagValue):
         Catalog(columns=_stand_in(tmp_path, mistag))
+
+
+def test_every_table_a_pipeline_reads_is_a_source(catalog):
+    assert sorted(catalog.sources) == [("fraud", "transactions"), ("policy", "claims")]
+
+
+def test_a_source_carries_only_its_domain_and_is_unclassified(catalog):
+    source = catalog.sources[("policy", "claims")]
+    assert source.classified is False
+    assert {k for c in source.columns for k in c.lf_tags} == {"domain"}
+
+
+def test_a_source_tagged_in_columns_json_is_classified(tmp_path):
+    def tag(data):
+        data["sources"]["policy_raw.claims"]["columns"][2]["lf_tags"] = {"sensitivity": "high"}
+
+    source = Catalog(columns=_stand_in(tmp_path, tag)).sources[("policy", "claims")]
+    assert source.classified is True
+
+
+def test_a_table_a_pipeline_reads_without_a_source_entry_fails_to_load(tmp_path):
+    path = _stand_in(tmp_path, lambda d: d["sources"].pop("policy_raw.claims"))
+    with pytest.raises(ValueError, match="policy_raw.claims"):
+        Catalog(columns=path)
+
+
+def test_a_source_no_pipeline_reads_fails_to_load(tmp_path):
+    def add(data):
+        data["sources"]["fraud_raw.chargebacks"] = {
+            "domain": "fraud",
+            "schema_version": 1,
+            "columns": [],
+        }
+
+    with pytest.raises(ValueError, match="fraud_raw.chargebacks"):
+        Catalog(columns=_stand_in(tmp_path, add))
+
+
+def test_a_source_owned_by_a_domain_outside_the_ontology_fails_to_load(tmp_path):
+    def mistag(data):
+        data["sources"]["policy_raw.claims"]["domain"] = "insurance"
+
+    with pytest.raises(UnknownTagValue):
+        Catalog(columns=_stand_in(tmp_path, mistag))

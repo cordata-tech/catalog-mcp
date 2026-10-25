@@ -11,7 +11,14 @@ from catalog_mcp.server import build_server
 
 pytestmark = pytest.mark.anyio
 
-TOOLS = {"list_domains", "get_dataset", "resolve_lf_tag", "check_grant_expression", "find_datasets"}
+TOOLS = {
+    "list_domains",
+    "get_dataset",
+    "resolve_lf_tag",
+    "check_grant_expression",
+    "find_datasets",
+    "get_consumers",
+}
 
 
 @pytest.fixture
@@ -20,7 +27,7 @@ async def client():
         yield c
 
 
-async def test_the_five_tools_and_nothing_else(client):
+async def test_the_six_tools_and_nothing_else(client):
     assert {t.name for t in (await client.list_tools()).tools} == TOOLS
 
 

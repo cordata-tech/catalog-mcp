@@ -95,6 +95,23 @@ def test_find_datasets_shows_only_the_callers_domains(rpc, mint):
     assert {d["domain"] for d in found} == {"fraud"}
 
 
+def test_consumers_in_domains_the_caller_cannot_read_are_still_listed(rpc, mint):
+    """A fraud-only token sees that finance reads fraud's table: the pin is
+    declared on that table, and a producer cannot act on part of the list."""
+    params = {"name": "get_consumers", "arguments": {"domain": "fraud", "table": "transactions"}}
+    response = rpc("tools/call", params, token=mint(FRAUD))
+    assert response.status_code == 200
+    found = response.json()["result"]["structuredContent"]["consumers"]
+    assert {c["domain"] for c in found} == {"fraud", "finance"}
+
+
+def test_the_consumers_of_a_table_out_of_scope_are_403(rpc, mint):
+    params = {"name": "get_consumers", "arguments": {"domain": "policy", "table": "claims"}}
+    response = rpc("tools/call", params, token=mint(FRAUD))
+    assert response.status_code == 403
+    assert 'scope="catalog:policy:read"' in response.headers["www-authenticate"]
+
+
 def test_list_results_are_cached_privately(rpc, mint):
     result = rpc("tools/list", token=mint(FRAUD)).json()["result"]
     assert result["cacheScope"] == "private"

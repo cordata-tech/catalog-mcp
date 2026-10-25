@@ -1,4 +1,4 @@
-"""The MCP server: five read-only tools and two resources over the catalog.
+"""The MCP server: six read-only tools and two resources over the catalog.
 
 Every tool is a lookup or an evaluation — the post's inclusion rule: a question
 gets a tool when its answer already exists as a record in the governance plane.
@@ -21,7 +21,7 @@ from pipeline_runtime.errors import UnknownTagKey, UnknownTagValue
 from pydantic import BaseModel, Field
 
 from . import PROTOCOL_REVISION, __version__
-from .catalog import Catalog, Column, Dataset, reaches
+from .catalog import Catalog, Column, Consumers, Dataset, reaches
 
 # Display metadata only — § 4 of the post. Read-only holds because no handler
 # writes and every object handed out is frozen, not because of these hints.
@@ -74,6 +74,7 @@ class DomainInfo(BaseModel):
     name: str
     owners: list[str]
     datasets: list[str]
+    sources: list[str] = Field(description="Source tables the domain owns, read by pipelines")
 
 
 class Domains(BaseModel):
@@ -127,16 +128,17 @@ def build_server(
     def list_domains() -> Domains:
         """What domains exist, and who owns them. Only the domains this caller may read."""
         granted = _granted(catalog)
-        by_domain: dict[str, list[Dataset]] = {}
+        by_domain: dict[str, list[Dataset]] = {d: [] for d in catalog.domains() if d in granted}
         for (domain, _), ds in catalog.datasets.items():
             if domain in granted:
-                by_domain.setdefault(domain, []).append(ds)
+                by_domain[domain].append(ds)
         return Domains(
             domains=[
                 DomainInfo(
                     name=domain,
                     owners=sorted({ds.metadata.owner for ds in found}),
                     datasets=sorted(t for (d, t) in catalog.datasets if d == domain),
+                    sources=sorted(t for (d, t) in catalog.sources if d == domain),
                 )
                 for domain, found in sorted(by_domain.items())
             ]
@@ -205,6 +207,27 @@ def build_server(
                 found.append(Match(domain=domain, table=table, columns=cols))
         return Matches(datasets=found)
 
+    @server.tool(title="Who reads a table", annotations=READ_ONLY)
+    def get_consumers(domain: DomainArg, table: TableArg) -> Consumers:
+        """Which pipelines declare that they read this table, and the version each pins.
+
+        For a source table — `fraud/transactions`, say — this is what breaks if
+        its producer changes a column: every consumer reads every column of the
+        version it pins. A source table also comes back with its columns and its
+        classification, which is `classified: false` when it carries no tag but
+        `domain`. The list is the runtime's own, `pins.readers()`, read from the
+        descriptors; readers that declare nothing — notebooks, BI tools, ad-hoc
+        SQL — are not on it, and observed reads are lineage, not this server.
+
+        Consumers in domains this caller cannot read are listed too: a pin is a
+        dependency declared on this table, and a producer cannot act on part of it.
+        """
+        _require(catalog, domain)
+        found = catalog.consumers(domain, table)
+        if found is None:
+            raise ToolError(f"no dataset or source table {domain}/{table}")
+        return found
+
     @server.resource(
         "cordata://ontology/lf-tags",
         name="lf-tag-ontology",
@@ -237,4 +260,4 @@ def _carries(column: Column, wanted: dict[str, str]) -> bool:
 
 DATASET_URI = re.compile(r"^cordata://domain/(?P<domain>[^/]+)/dataset/[^/]+$")
 # The tools whose answer is scoped to one domain, named in their `domain` argument.
-DOMAIN_TOOLS = frozenset({"get_dataset", "check_grant_expression"})
+DOMAIN_TOOLS = frozenset({"get_dataset", "check_grant_expression", "get_consumers"})
