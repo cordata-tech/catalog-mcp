@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 — unreleased
+## 0.3.0 — 2026-10-25
 
 **A sixth tool, `get_consumers`**, answers which pipelines declare that they read a
 table, with each one's owner, domain and pinned schema version (#2). The list comes
