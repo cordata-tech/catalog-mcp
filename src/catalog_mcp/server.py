@@ -115,7 +115,8 @@ def build_server(
         website_url="https://cordata.tech/en/blog/governed-mesh-over-mcp",
         instructions=(
             "A read-only catalog. It answers questions about datasets — ownership, "
-            "schema, LF-tag policy — never from them: no rows, no per-user grant "
+            "schema, LF-tag policy, which pipelines declare that they read a table — "
+            "never from them: no rows, no per-user grant "
             f"listings, no cross-domain joins. Verified against MCP {PROTOCOL_REVISION}."
         ),
         auth=auth,

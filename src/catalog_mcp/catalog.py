@@ -177,7 +177,11 @@ class Catalog:
         published = {ref.fqn for ref in tables.values()}
         sources: dict[tuple[str, str], Source] = {}
         for fqn, entry in sorted(declared_sources.items()):
-            if fqn in published or fqn not in read:
+            if fqn in published:
+                raise ValueError(
+                    f"columns.json describes {fqn} as a source, but a descriptor publishes it"
+                )
+            if fqn not in read:
                 raise ValueError(f"columns.json describes {fqn} as a source no descriptor reads")
             database, table = fqn.split(".")
             ref = v1.TableRef(database=database, table=table)
@@ -196,7 +200,9 @@ class Catalog:
             )
             tables[key] = ref
         if unknown := read - published - set(declared_sources):
-            raise ValueError(f"descriptors read tables columns.json has no source for: {unknown}")
+            raise ValueError(
+                f"descriptors read tables columns.json has no source for: {sorted(unknown)}"
+            )
 
         consumers = {
             key: Consumers(
