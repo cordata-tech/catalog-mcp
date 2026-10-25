@@ -93,7 +93,8 @@ jobs:
           from catalog_mcp.catalog import Catalog
           catalog = Catalog()
           assert len(catalog.datasets) == 3, sorted(catalog.datasets)
-          print("catalog loads", sorted(catalog.datasets))
+          assert len(catalog.sources) == 2, sorted(catalog.sources)
+          print("catalog loads", sorted(catalog.datasets), "and sources", sorted(catalog.sources))
           PY
 
       - uses: actions/upload-artifact@v7

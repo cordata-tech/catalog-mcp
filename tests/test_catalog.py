@@ -142,6 +142,18 @@ def test_a_source_no_pipeline_reads_fails_to_load(tmp_path):
         Catalog(columns=_stand_in(tmp_path, add))
 
 
+def test_a_published_dataset_described_as_a_source_fails_to_load(tmp_path):
+    def add(data):
+        data["sources"]["fraud_curated.transactions_scored"] = {
+            "domain": "fraud",
+            "schema_version": 1,
+            "columns": [],
+        }
+
+    with pytest.raises(ValueError, match="a descriptor publishes it"):
+        Catalog(columns=_stand_in(tmp_path, add))
+
+
 def test_a_source_owned_by_a_domain_outside_the_ontology_fails_to_load(tmp_path):
     def mistag(data):
         data["sources"]["policy_raw.claims"]["domain"] = "insurance"
