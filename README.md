@@ -4,7 +4,7 @@ A read-only [Model Context Protocol](https://modelcontextprotocol.io) server tha
 
 It is the runnable version of a design written up in two posts on cordata.tech. [Fabric + Mesh on AWS — LakeFormation, DataZone, and one governance plane](https://cordata.tech/en/blog/fabric-mesh-on-aws) lays out the reference topology this server is modelled on, with one AWS account per data domain and a governance account that owns the LF-tag ontology and the grants, and closes its [§ 3](https://cordata.tech/en/blog/fabric-mesh-on-aws#s3) by proposing an MCP catalog tool. [The catalog is the API — a governed mesh over MCP](https://cordata.tech/en/blog/governed-mesh-over-mcp) designs that tool: which questions it answers and where its schemas come from, why read-only has to be enforced rather than annotated, and how authorization works. Where this README says "§ N of the post", it means that second post.
 
-Verified against MCP revision **`2026-07-28`**, the Python SDK **`mcp` 2.3**, and `cordata-pipeline-runtime` **0.2**. MCP has changed substantially between revisions, so check those three numbers before trusting a detail below against a newer stack.
+Verified against MCP revision **`2026-07-28`**, the Python SDK **`mcp` 2.3**, and `cordata-pipeline-runtime` **0.2.9**. MCP has changed substantially between revisions, so check those three numbers before trusting a detail below against a newer stack.
 
 ## Start it
 
@@ -31,15 +31,16 @@ Over stdio there is no token. The client that started the process is the only pa
 
 ## What it answers
 
-Five tools, each a lookup or an evaluation against a record the governance plane already holds:
+Six tools, each a lookup or an evaluation against a record the governance plane already holds:
 
 | Tool | Answers |
 |---|---|
-| `list_domains` | Which domains exist, and who owns their datasets |
+| `list_domains` | Which domains exist, who owns their datasets, and which source tables each owns |
 | `get_dataset` | One dataset's owner, contract and columns, each column with its effective LF-tags |
 | `resolve_lf_tag` | Whether a tag set is valid against the governance-owned ontology |
 | `check_grant_expression` | Whether a tag-based grant expression would reach a dataset, and which columns |
 | `find_datasets` | Which datasets carry given tag values, for example `subject_type=customer` |
+| `get_consumers` | Which pipelines declare that they read a table, and the schema version each pins |
 
 LF-tags are Lake Formation's key–value classification labels; a grant written as a tag expression reaches every table or column whose tags match it, which is how the [reference topology](https://cordata.tech/en/blog/fabric-mesh-on-aws#s3) controls access without per-table grants.
 
@@ -52,6 +53,18 @@ Two resources sit beside the tools: the ontology as `cordata://ontology/lf-tags`
 ### Where the columns come from
 
 Ownership, contracts and the ontology all come from `cordata-pipeline-runtime`. Column lists do not, because a pipeline descriptor does not carry one: in a deployment they live in each domain's Glue catalog. Here [`columns.json`](src/catalog_mcp/columns.json) stands in for that catalog. Each column's tags are checked against the ontology when the server starts, and CI runs the runtime's three example pipelines and fails if a column name or type in `columns.json` differs from the Parquet they write.
+
+`columns.json` also holds the two source tables the pipelines read, `fraud_raw.transactions` and `policy_raw.claims`, which no descriptor publishes. For each it records the owning domain, the schema version the catalog is at, and that version's columns, and CI fails if any of the three differs from the catalog the runtime seeds, which is the catalog the pipelines resolve their pins against.
+
+### Who reads a table
+
+`get_consumers` answers *"who reads this table, and what breaks if I change a column?"* with the pipelines whose descriptors name the table as their source. For `fraud/transactions` that is fraud's `transactions-scored-daily` and finance's `merchant-settlement-daily`, both pinning v7, each with its owner. A pipeline reads every column of the version it pins, so a removed or retyped column breaks every consumer on the list.
+
+The list is the runtime's own. `pipeline_runtime.pins.readers()` is what the runtime's producer-side check, `python -m pipeline_runtime.consumers`, builds its report from, and since `cordata-pipeline-runtime` 0.2.9 it is on the base install, so this server calls it rather than deriving the list again. Readers that declare nothing — notebooks, BI tools, ad-hoc SQL — are not on it. Observed reads are run history, which belongs to a lineage reader such as `qedro`, and this server still reads no OpenLineage events.
+
+A caller who may read the table sees every consumer, including pipelines in domains it has no scope for. A pin is a dependency declared against this table, and a producer working from part of the list would break the pipelines it could not see.
+
+A source table comes back with its columns and `classified: false`. The runtime's catalog records only which domain owns an application's table, because classifying it is the owner's decision, so the server shows the table as unclassified rather than giving it the tags of the pipelines that read it. That has a consequence worth knowing: `fraud_raw.transactions` holds IBANs, yet `find_datasets` with `{"subject_type": "customer"}` does not return it, and a Lake Formation grant written on `sensitivity` would not reach it either. `get_dataset`, `check_grant_expression` and `find_datasets` cover the published datasets only.
 
 ### Matching the runtime's lineage
 
@@ -137,7 +150,8 @@ pytest
 The column check needs a warehouse the runtime's example pipelines have written, from a clone of `cordata-tech/pipeline-runtime` at the installed version; `.github/workflows/ci.yml` shows the steps.
 
 ```sh
-CORDATA_WAREHOUSE=../pipeline-runtime/example/warehouse python -m tools.check_columns
+CORDATA_WAREHOUSE=../pipeline-runtime/example/warehouse \
+CORDATA_CATALOG=../pipeline-runtime/example/catalog.duckdb python -m tools.check_columns
 ```
 
 ## Licence

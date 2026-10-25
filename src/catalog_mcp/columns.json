@@ -8,7 +8,15 @@
     "against the runtime's ontology when the catalog loads. The IBAN columns carry",
     "an explicit tag, as the fabric-mesh-on-aws Terraform tags policy.customer.iban.",
     "Both tables are already sensitivity=high, so today the column tag repeats the",
-    "table's; it keeps the IBAN high if the table's classification is ever lowered."
+    "table's; it keeps the IBAN high if the table's classification is ever lowered.",
+    "",
+    "`sources` holds the tables the pipelines read, which no descriptor publishes:",
+    "the domain that owns each and the version it is at, both as the runtime's",
+    "seeded catalog records them, and the columns of that version. CI fails if any",
+    "of the three differs from that catalog, or if it holds a tag besides `domain`.",
+    "Their IBAN columns carry no tag on purpose: classifying an application's table",
+    "is its owner's decision, and nobody has made it, so the server shows the table",
+    "as unclassified rather than borrowing the tags of the pipelines that read it."
   ],
   "fraud/transactions_scored": [
     {"name": "tx_id", "type": "VARCHAR"},
@@ -36,5 +44,33 @@
     {"name": "settlement_date", "type": "DATE"},
     {"name": "tx_count", "type": "BIGINT"},
     {"name": "amount_eur", "type": "DOUBLE"}
-  ]
+  ],
+  "sources": {
+    "fraud_raw.transactions": {
+      "domain": "fraud",
+      "schema_version": 7,
+      "columns": [
+        {"name": "tx_id", "type": "VARCHAR"},
+        {"name": "account_id", "type": "VARCHAR"},
+        {"name": "iban", "type": "VARCHAR"},
+        {"name": "amount_eur", "type": "DOUBLE"},
+        {"name": "currency", "type": "VARCHAR"},
+        {"name": "status", "type": "VARCHAR"},
+        {"name": "booked_at", "type": "TIMESTAMP"},
+        {"name": "merchant_id", "type": "VARCHAR"}
+      ]
+    },
+    "policy_raw.claims": {
+      "domain": "policy",
+      "schema_version": 3,
+      "columns": [
+        {"name": "claim_id", "type": "VARCHAR"},
+        {"name": "policy_id", "type": "VARCHAR"},
+        {"name": "claimant_iban", "type": "VARCHAR"},
+        {"name": "amount_eur", "type": "DOUBLE"},
+        {"name": "reported_at", "type": "TIMESTAMP"},
+        {"name": "status", "type": "VARCHAR"}
+      ]
+    }
+  }
 }

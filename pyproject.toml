@@ -11,10 +11,10 @@ license = "MIT"
 requires-python = ">=3.12"
 authors = [{ name = "Cordata", email = "hello@cordata.tech" }]
 dependencies = [
-    # The descriptor model, the policy resolution and the example data — the
-    # base install, with no execution stack. Never the bare `pipeline-runtime`,
-    # which is an unrelated package on PyPI.
-    "cordata-pipeline-runtime>=0.2,<0.3",
+    # The descriptor model, the policy resolution, the example data and, since
+    # 0.2.9, `pins` — the base install, with no execution stack. Never the bare
+    # `pipeline-runtime`, which is an unrelated package on PyPI.
+    "cordata-pipeline-runtime>=0.2.9,<0.3",
     # 2.x speaks the 2026-07-28 revision; 2.3 is the version this was verified against.
     "mcp>=2.3,<3",
     "pyjwt[crypto]>=2.8",
