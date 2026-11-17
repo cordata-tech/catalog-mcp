@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 — unreleased
+## 0.4.0 — 2026-11-17
 
 **A seventh tool, `get_erasure_scope`**, returns every dataset tagged with a subject
 type in one call, which took a `find_datasets` followed by a `get_dataset` and a
