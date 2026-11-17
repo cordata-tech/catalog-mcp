@@ -145,6 +145,7 @@ class Catalog:
         datasets: dict[tuple[str, str], Dataset] = {}
         tables: dict[tuple[str, str], v1.TableRef] = {}
         read: set[str] = set()
+        reads_from: dict[tuple[str, str], str] = {}
         for domain_dir in sorted(domains.iterdir(), key=lambda p: p.name):
             pipelines = domain_dir.joinpath("pipelines")
             if not pipelines.is_dir():
@@ -169,6 +170,7 @@ class Catalog:
                     lineage=lineage_of(metadata.domain, target),
                 )
                 tables[(metadata.domain, target.table)] = target
+                reads_from[(metadata.domain, target.table)] = pipeline.source.fqn
         if stand_in:
             raise ValueError(
                 f"columns.json describes datasets no descriptor publishes: {sorted(stand_in)}"
@@ -212,10 +214,15 @@ class Catalog:
             )
             for key, ref in tables.items()
         }
+        # Every table a pipeline reads is a dataset or a source by now, so each
+        # dataset's source resolves to a catalog key.
+        by_fqn = {ref.fqn: key for key, ref in tables.items()}
+        upstream = {key: by_fqn[fqn] for key, fqn in reads_from.items()}
 
         self._datasets: Mapping[tuple[str, str], Dataset] = MappingProxyType(datasets)
         self._sources: Mapping[tuple[str, str], Source] = MappingProxyType(sources)
         self._consumers: Mapping[tuple[str, str], Consumers] = MappingProxyType(consumers)
+        self._upstream: Mapping[tuple[str, str], tuple[str, str]] = MappingProxyType(upstream)
 
     @property
     def datasets(self) -> Mapping[tuple[str, str], Dataset]:
@@ -234,6 +241,10 @@ class Catalog:
     def consumers(self, domain: str, table: str) -> Consumers | None:
         """Who declares a read of this dataset or source table; None if the catalog has neither."""
         return self._consumers.get((domain, table))
+
+    def upstream(self, domain: str, table: str) -> tuple[str, str] | None:
+        """The catalog key of the table this dataset's pipeline declares as its source."""
+        return self._upstream.get((domain, table))
 
     @staticmethod
     def ontology() -> dict[str, list[str]]:

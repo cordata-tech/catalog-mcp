@@ -31,7 +31,7 @@ Over stdio there is no token. The client that started the process is the only pa
 
 ## What it answers
 
-Six tools, each a lookup or an evaluation against a record the governance plane already holds:
+Seven tools, each a lookup or an evaluation against a record the governance plane already holds:
 
 | Tool | Answers |
 |---|---|
@@ -41,6 +41,7 @@ Six tools, each a lookup or an evaluation against a record the governance plane 
 | `check_grant_expression` | Whether a tag-based grant expression would reach a dataset, and which columns |
 | `find_datasets` | Which datasets carry given tag values, for example `subject_type=customer` |
 | `get_consumers` | Which pipelines declare that they read a table, and the schema version each pins |
+| `get_erasure_scope` | Every dataset tagged with a subject type, with its owner, those columns, its `retention` tag, its readers and the table it was derived from |
 
 LF-tags are Lake Formation's key–value classification labels; a grant written as a tag expression reaches every table or column whose tags match it, which is how the [reference topology](https://cordata.tech/en/blog/fabric-mesh-on-aws#s3) controls access without per-table grants.
 
@@ -107,6 +108,32 @@ lf_tag residency='eea' is not in the ontology; allowed: ['eu', 'ch', 'us', 'glob
 Validation catches a value nobody defined; it cannot catch a legal value that is wrong for this column. `residency` records where the *data* is stored, so an IBAN column in an extract replicated across regions should be `global`, and `resolve_lf_tag` accepts `eu` and `global` alike. That is the failure [§ 1](https://cordata.tech/en/blog/governed-mesh-over-mcp#s1) describes, and the reason the precedent lookup comes first.
 
 **Check who could read it.** The analyst role in the [reference topology](https://cordata.tech/en/blog/fabric-mesh-on-aws#s3) may read every sensitivity except `high`. `check_grant_expression` with that role's expression, `{"domain": ["fraud"], "sensitivity": ["public", "internal", "confidential"], "residency": ["eu"]}`, returns `{"reaches": false, "columns": []}` for `transactions_scored`. In this example the whole table is classified `high`, so the role reaches nothing in it. The reference topology's Terraform tags only the `iban` column of its customer table `high`, and there the same role sees the table with the IBAN column left out. The IBAN columns here carry their own `high` tag as well, so that they stay `high` if a table's classification is ever lowered.
+
+**Find what an erasure would have to reach.** Once customer IBANs are registered, a request to erase one customer's data starts from where that kind of data is registered, which `get_erasure_scope` with `"customer"` returns in one call instead of a `find_datasets`, then a `get_dataset` and a `get_consumers` for each result. For `transactions_scored` it returns this:
+
+```json
+{
+  "domain": "fraud", "table": "transactions_scored", "owner": "fraud-data@example.com",
+  "columns": ["tx_id", "account_id", "iban", "…"],
+  "retention": null,
+  "consumers": [],
+  "reads_from": {
+    "lineage": {"namespace": "cordata://fraud", "name": "fraud_raw.transactions"},
+    "classified": false,
+    "columns": [],
+    "consumers": [
+      {"pipeline": "merchant-settlement-daily", "domain": "finance", "pins": 7, "…": "…"},
+      {"pipeline": "transactions-scored-daily", "domain": "fraud", "pins": 7, "…": "…"}
+    ]
+  }
+}
+```
+
+(trimmed; `claims_deduped` follows in the same shape)
+
+Every column is listed rather than only `iban`, because `subject_type: customer` is a table-level tag and each column inherits it. `retention` is `null` because no example descriptor sets a `retention` tag, and the server reports a missing tag as missing rather than assuming a period; when the tag is set, it is reported as written, and whether a deletion meets a retention duty stays the owner's decision. Nothing reads `transactions_scored`, but the table its pipeline reads, `fraud_raw.transactions`, holds the same IBANs and is read by finance as well. It comes back as `classified: false` with no tagged columns: the tool names it because it feeds the dataset, not because it was found to hold customer data. Like `find_datasets`, it lists where the data is registered and cannot say where one person's rows are.
+
+Over HTTP, a dataset in a domain the token cannot read is left out, and the result's `complete` field is then `false`, so an erasure orchestrator can tell a partial list from a full one; which domain and which dataset were left out is not said. Readers of the datasets it does return are listed in every domain, as with `get_consumers`, because a reader the caller cannot see is still a copy of the data.
 
 ## Read-only, and how that is enforced
 

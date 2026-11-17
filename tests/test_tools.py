@@ -18,6 +18,7 @@ TOOLS = {
     "check_grant_expression",
     "find_datasets",
     "get_consumers",
+    "get_erasure_scope",
 }
 
 
@@ -27,7 +28,7 @@ async def client():
         yield c
 
 
-async def test_the_six_tools_and_nothing_else(client):
+async def test_the_seven_tools_and_nothing_else(client):
     assert {t.name for t in (await client.list_tools()).tools} == TOOLS
 
 

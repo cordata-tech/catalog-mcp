@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.0 — unreleased
+
+**A seventh tool, `get_erasure_scope`**, returns every dataset tagged with a subject
+type in one call, which took a `find_datasets` followed by a `get_dataset` and a
+`get_consumers` per result before (#3). Each dataset comes with its owning domain and
+owner, the columns tagged with the subject type, its `retention` tag, its declared
+readers, and the table its pipeline reads together with that table's own readers.
+
+`retention` is `null` when the dataset has no `retention` tag, which is the case for
+every example dataset, and a tag that is set is reported as written without a ruling
+on whether a deletion meets a retention duty. The table a dataset is derived from is
+listed with its `classified` flag, so `fraud_raw.transactions`, which holds the same
+IBANs as `transactions_scored` but carries only its `domain` tag, appears as feeding
+that dataset rather than as customer data.
+
+Datasets in domains the caller may not read are left out, and the result's `complete`
+field is `false` when any were, without naming which. Readers are listed in every
+domain, as `get_consumers` lists them. The tool lists where data is registered and,
+like `find_datasets`, cannot say where one person's rows are.
+
 ## 0.3.0 — 2026-10-25
 
 **A sixth tool, `get_consumers`**, answers which pipelines declare that they read a

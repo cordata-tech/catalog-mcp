@@ -1,4 +1,4 @@
-"""The MCP server: six read-only tools and two resources over the catalog.
+"""The MCP server: seven read-only tools and two resources over the catalog.
 
 Every tool is a lookup or an evaluation — the post's inclusion rule: a question
 gets a tool when its answer already exists as a record in the governance plane.
@@ -21,7 +21,7 @@ from pipeline_runtime.errors import UnknownTagKey, UnknownTagValue
 from pydantic import BaseModel, Field
 
 from . import PROTOCOL_REVISION, __version__
-from .catalog import Catalog, Column, Consumers, Dataset, reaches
+from .catalog import Catalog, Column, Consumer, Consumers, Dataset, Lineage, reaches
 
 # Display metadata only — § 4 of the post. Read-only holds because no handler
 # writes and every object handed out is frozen, not because of these hints.
@@ -98,6 +98,50 @@ class Match(BaseModel):
 
 class Matches(BaseModel):
     datasets: list[Match]
+
+
+class Upstream(BaseModel):
+    """The table a dataset's pipeline declares as its source."""
+
+    lineage: Lineage
+    classified: bool = Field(
+        description=(
+            "False for a source table with no tag but `domain`: nobody has recorded what "
+            "it holds, so it is listed because it feeds the dataset, not because it was "
+            "found to hold the subject type"
+        )
+    )
+    columns: list[str] = Field(
+        description="Its own columns tagged with the subject type; empty when unclassified"
+    )
+    consumers: list[Consumer] = Field(description="Every pipeline that declares a read of it")
+
+
+class ScopeEntry(BaseModel):
+    domain: str
+    table: str
+    owner: str
+    lineage: Lineage
+    columns: list[str] = Field(description="The columns tagged with the subject type")
+    retention: str | None = Field(
+        description=(
+            "The dataset's `retention` LF-tag, or null when none is recorded. Reported as "
+            "tagged; whether a deletion meets a retention duty is not decided here"
+        )
+    )
+    consumers: list[Consumer] = Field(description="Every pipeline that declares a read of it")
+    reads_from: Upstream
+
+
+class ErasureScope(BaseModel):
+    subject_type: str
+    datasets: list[ScopeEntry]
+    complete: bool = Field(
+        description=(
+            "False when a dataset tagged with this subject type sits in a domain this "
+            "caller may not read and was left out. Which domain and which dataset are not said"
+        )
+    )
 
 
 def build_server(
@@ -229,6 +273,55 @@ def build_server(
             raise ToolError(f"no dataset or source table {domain}/{table}")
         return found
 
+    @server.tool(title="Where a subject type is registered", annotations=READ_ONLY)
+    def get_erasure_scope(
+        subject_type: Annotated[
+            str, Field(description="A subject_type value from the ontology, e.g. customer")
+        ],
+    ) -> ErasureScope:
+        """Every dataset tagged with this subject type: owner, columns, retention and readers.
+
+        What an erasure needs first is where a kind of personal data is
+        registered. This lists registered datasets, never rows: it cannot say
+        where one person's rows are, because finding those is a query against
+        the data, and this server never reads data. Each dataset's `retention`
+        tag is reported as tagged and not interpreted; whether a deletion meets
+        a retention duty is its owner's decision, not this server's.
+
+        Each dataset also names the table its pipeline reads, with that table's
+        own readers. A source table nobody has classified is listed there
+        because it feeds the dataset, not because it was found to hold the
+        subject type. Readers in domains this caller cannot read are listed, as
+        in `get_consumers`; datasets in those domains are left out, and
+        `complete` is false when any were.
+        """
+        try:
+            wanted = catalog.resolve({"subject_type": subject_type})
+        except (UnknownTagKey, UnknownTagValue) as exc:
+            raise ToolError(str(exc)) from exc
+        granted = _granted(catalog)
+        found, complete = [], True
+        for (domain, table), ds in sorted(catalog.datasets.items()):
+            cols = [c.name for c in ds.columns if _carries(c, wanted)]
+            if not cols:
+                continue
+            if domain not in granted:
+                complete = False
+                continue
+            found.append(
+                ScopeEntry(
+                    domain=domain,
+                    table=table,
+                    owner=ds.metadata.owner,
+                    lineage=ds.lineage,
+                    columns=cols,
+                    retention=ds.contract.lf_tags.get("retention"),
+                    consumers=catalog.consumers(domain, table).consumers,
+                    reads_from=_upstream(catalog, catalog.upstream(domain, table), wanted),
+                )
+            )
+        return ErasureScope(subject_type=subject_type, datasets=found, complete=complete)
+
     @server.resource(
         "cordata://ontology/lf-tags",
         name="lf-tag-ontology",
@@ -257,6 +350,21 @@ def build_server(
 
 def _carries(column: Column, wanted: dict[str, str]) -> bool:
     return all(column.lf_tags.get(k) == v for k, v in wanted.items())
+
+
+def _upstream(catalog: Catalog, key: tuple[str, str], wanted: dict[str, str]) -> Upstream:
+    record = catalog.consumers(*key)
+    if record.source is not None:
+        classified, columns = record.source.classified, record.source.columns
+    else:
+        # Another pipeline's dataset, classified by that pipeline's contract.
+        classified, columns = True, catalog.get(*key).columns
+    return Upstream(
+        lineage=record.lineage,
+        classified=classified,
+        columns=[c.name for c in columns if _carries(c, wanted)],
+        consumers=record.consumers,
+    )
 
 
 DATASET_URI = re.compile(r"^cordata://domain/(?P<domain>[^/]+)/dataset/[^/]+$")
