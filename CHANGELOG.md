@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.1 — unreleased
+## 0.4.1 — 2026-11-17
 
 **The example's customer datasets now report a retention period** (#4).
 `cordata-pipeline-runtime` 0.2.11 tags `fraud/transactions_scored` with
