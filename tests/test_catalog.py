@@ -37,6 +37,7 @@ def test_columns_inherit_the_table_tags_and_the_domain(catalog):
         "sensitivity": "high",
         "residency": "eu",
         "subject_type": "customer",
+        "retention": "7y",
     }
     assert columns["amount_eur"] == columns["iban"]
 

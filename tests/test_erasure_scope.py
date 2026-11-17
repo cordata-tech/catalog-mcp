@@ -67,26 +67,28 @@ async def test_the_table_the_ibans_came_from_is_named_but_not_called_customer_da
 
 
 @pytest.mark.anyio
-async def test_no_example_dataset_records_retention(client):
-    """`null` is "not recorded"; nothing fills it with a default."""
-    assert {d["retention"] for d in (await scope(client))["datasets"]} == {None}
+async def test_each_customer_dataset_reports_its_retention_tag_as_written(client):
+    """The two published descriptors tag different periods (pipeline-runtime#16)."""
+    retention = {d["table"]: d["retention"] for d in (await scope(client))["datasets"]}
+    assert retention == {"transactions_scored": "7y", "claims_deduped": "10y"}
 
 
 @pytest.mark.anyio
-async def test_a_retention_tag_is_reported_as_tagged(tmp_path):
+async def test_a_dataset_without_a_retention_tag_reports_null(tmp_path):
+    """`null` is "not recorded"; nothing fills it with a default."""
     example = tmp_path / "example"
     shutil.copytree(
         Path(files("pipeline_runtime.example").joinpath("domains")), example / "domains"
     )
     path = example / "domains/fraud/pipelines/transactions_scored.yml"
     raw = yaml.safe_load(path.read_text())
-    raw["contract"]["lf_tags"]["retention"] = "10y"
+    del raw["contract"]["lf_tags"]["retention"]
     path.write_text(yaml.safe_dump(raw))
 
     async with Client(build_server(Catalog(example=example))) as c:
         found = await scope(c)
     retention = {d["table"]: d["retention"] for d in found["datasets"]}
-    assert retention == {"transactions_scored": "10y", "claims_deduped": None}
+    assert retention == {"transactions_scored": None, "claims_deduped": "10y"}
 
 
 @pytest.mark.anyio

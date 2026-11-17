@@ -4,7 +4,7 @@ A read-only [Model Context Protocol](https://modelcontextprotocol.io) server tha
 
 It is the runnable version of a design written up in two posts on cordata.tech. [Fabric + Mesh on AWS — LakeFormation, DataZone, and one governance plane](https://cordata.tech/en/blog/fabric-mesh-on-aws) lays out the reference topology this server is modelled on, with one AWS account per data domain and a governance account that owns the LF-tag ontology and the grants, and closes its [§ 3](https://cordata.tech/en/blog/fabric-mesh-on-aws#s3) by proposing an MCP catalog tool. [The catalog is the API — a governed mesh over MCP](https://cordata.tech/en/blog/governed-mesh-over-mcp) designs that tool: which questions it answers and where its schemas come from, why read-only has to be enforced rather than annotated, and how authorization works. Where this README says "§ N of the post", it means that second post.
 
-Verified against MCP revision **`2026-07-28`**, the Python SDK **`mcp` 2.3**, and `cordata-pipeline-runtime` **0.2.9**. MCP has changed substantially between revisions, so check those three numbers before trusting a detail below against a newer stack.
+Verified against MCP revision **`2026-07-28`**, the Python SDK **`mcp` 2.3**, and `cordata-pipeline-runtime` **0.2.11**. MCP has changed substantially between revisions, so check those three numbers before trusting a detail below against a newer stack.
 
 ## Start it
 
@@ -115,7 +115,7 @@ Validation catches a value nobody defined; it cannot catch a legal value that is
 {
   "domain": "fraud", "table": "transactions_scored", "owner": "fraud-data@example.com",
   "columns": ["tx_id", "account_id", "iban", "…"],
-  "retention": null,
+  "retention": "7y",
   "consumers": [],
   "reads_from": {
     "lineage": {"namespace": "cordata://fraud", "name": "fraud_raw.transactions"},
@@ -129,9 +129,9 @@ Validation catches a value nobody defined; it cannot catch a legal value that is
 }
 ```
 
-(trimmed; `claims_deduped` follows in the same shape)
+(trimmed; `claims_deduped` follows in the same shape, with `"retention": "10y"`)
 
-Every column is listed rather than only `iban`, because `subject_type: customer` is a table-level tag and each column inherits it. `retention` is `null` because no example descriptor sets a `retention` tag, and the server reports a missing tag as missing rather than assuming a period; when the tag is set, it is reported as written, and whether a deletion meets a retention duty stays the owner's decision. Nothing reads `transactions_scored`, but the table its pipeline reads, `fraud_raw.transactions`, holds the same IBANs and is read by finance as well. It comes back as `classified: false` with no tagged columns: the tool names it because it feeds the dataset, not because it was found to hold customer data. Like `find_datasets`, it lists where the data is registered and cannot say where one person's rows are.
+Every column is listed rather than only `iban`, because `subject_type: customer` is a table-level tag and each column inherits it. `retention` is the tag each descriptor's contract sets, `7y` for scored transactions and `10y` for deduplicated claims since `cordata-pipeline-runtime` 0.2.11 ([pipeline-runtime#16](https://github.com/cordata-tech/pipeline-runtime/issues/16) records why the two differ). The server reports the tag as written and leaves whether a deletion meets a retention duty to the owner, and a dataset with no `retention` tag comes back as `null` rather than with an assumed period. Nothing reads `transactions_scored`, but the table its pipeline reads, `fraud_raw.transactions`, holds the same IBANs and is read by finance as well. It comes back as `classified: false` with no tagged columns: the tool names it because it feeds the dataset, not because it was found to hold customer data. Like `find_datasets`, it lists where the data is registered and cannot say where one person's rows are.
 
 Over HTTP, a dataset in a domain the token cannot read is left out, and the result's `complete` field is then `false`, so an erasure orchestrator can tell a partial list from a full one; which domain and which dataset were left out is not said. Readers of the datasets it does return are listed in every domain, as with `get_consumers`, because a reader the caller cannot see is still a copy of the data.
 

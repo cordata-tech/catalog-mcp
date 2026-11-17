@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1 — unreleased
+
+**The example's customer datasets now report a retention period** (#4).
+`cordata-pipeline-runtime` 0.2.11 tags `fraud/transactions_scored` with
+`retention: 7y` and `policy/claims_deduped` with `retention: 10y`
+(pipeline-runtime#16), so `get_erasure_scope` returns those values where 0.4.0 on the
+older runtime returned `null`. The README's IBAN walkthrough shows them, and the
+tests that assumed no retention tag now assert the two values, with a separate test
+that a dataset whose tag is removed still comes back as `null`.
+
+The minimum runtime is 0.2.11. The server's code is unchanged: 0.4.0 already
+reported the tag as written, and with 0.2.11 installed it returns the same values.
+
 ## 0.4.0 — 2026-11-17
 
 **A seventh tool, `get_erasure_scope`**, returns every dataset tagged with a subject
