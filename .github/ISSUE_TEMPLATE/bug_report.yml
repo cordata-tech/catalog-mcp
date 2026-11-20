@@ -1,0 +1,78 @@
+name: Bug report
+description: The server answered, refused or classified something wrong
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. A request that sees a domain its token should not is the most valuable
+        report this project can get — but please send that one privately, through a
+        security advisory (see SECURITY.md), not here.
+
+        **A catalog can be sensitive.** Dataset names, column names and owner addresses
+        can say a lot on their own. If you are running the server against your own
+        catalog, share the smallest example that shows the problem and rename anything
+        you would not publish.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem
+      options:
+        - A column's tags, or a grant check, are not what Lake Formation would compute
+        - A dataset, source table or consumer is missing, or should not be there
+        - A tool's output does not match its outputSchema or its description
+        - An HTTP response was wrong (401, 403, a scope, a header)
+        - A crash, or an error message that did not say what to do
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: cordata-catalog-mcp version
+      description: The output of `cordata-catalog-mcp --version`, and the `cordata-pipeline-runtime` version it runs with.
+      placeholder: cordata-catalog-mcp 0.4.1 (MCP 2026-07-28), cordata-pipeline-runtime 0.2.11
+    validations:
+      required: true
+
+  - type: textarea
+    id: request
+    attributes:
+      label: The request
+      description: The tool or resource, and the arguments you passed. Leave the token out.
+      render: json
+      placeholder: '{"name": "get_erasure_scope", "arguments": {"subject_type": "customer"}}'
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened, and what you expected instead
+      description: The response, or the part of it that is wrong, and what it should have said.
+    validations:
+      required: true
+
+  - type: input
+    id: transport
+    attributes:
+      label: How the client connected
+      description: stdio or HTTP, and the MCP client and its version.
+      placeholder: stdio, from Claude Code 2.4
+
+  - type: input
+    id: environment
+    attributes:
+      label: Python and operating system
+      placeholder: Python 3.13 on macOS 15
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Did a coding agent help find or write this up? (optional)
+      description: Welcome either way; it tells us how to read the report.
+      options:
+        - "No"
+        - "Yes"

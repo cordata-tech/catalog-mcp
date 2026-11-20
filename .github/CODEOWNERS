@@ -1,0 +1,46 @@
+# Who gets asked to review what.
+#
+# One maintainer today, so most of this is routing rather than gatekeeping:
+# GitHub requests a review from the owner of every path a pull request touches.
+# The paths listed separately are the ones where a change is easy to make and
+# expensive to get wrong, and they are the commitments CONTRIBUTING.md says the
+# server keeps. Listing them is also a note to a future second maintainer about
+# which files deserve a slower read.
+
+*                                   @lhadhazy
+
+# Who may read which domain: one issuer, this server's own audience, and a
+# per-domain scope checked in the HTTP layer and again in every handler. A
+# change here changes what a token can see.
+/src/catalog_mcp/auth.py            @lhadhazy
+/src/catalog_mcp/app.py             @lhadhazy
+
+# The tools, their scope checks and their output models. Every outputSchema is
+# derived from these models, and the README and the published post quote
+# get_dataset's shape, so a renamed field breaks clients that validate.
+/src/catalog_mcp/server.py          @lhadhazy
+/src/catalog_mcp/catalog.py         @lhadhazy
+
+# The stand-in Glue catalog, including how the IBAN columns and the source
+# tables are classified. CI checks it against what the runtime writes and seeds.
+/src/catalog_mcp/columns.json       @lhadhazy
+
+# What holds this repository's restatements to the runtime: the column check,
+# the lineage-identity check and the events a runtime release emitted.
+/tools/                             @lhadhazy
+/tests/fixtures/                    @lhadhazy
+
+# Releases and dependencies. Pushing a `v*` tag publishes to PyPI, where a
+# version number can never be reused, and the base install must stay without
+# the runtime's execution stack.
+/.github/workflows/                 @lhadhazy
+/pyproject.toml                     @lhadhazy
+/CHANGELOG.md                       @lhadhazy
+
+# The rules every contributor and agent works to.
+/AGENTS.md                          @lhadhazy
+/CONTRIBUTING.md                    @lhadhazy
+/SECURITY.md                        @lhadhazy
+/.github/pull_request_template.md   @lhadhazy
+/.github/ISSUE_TEMPLATE/            @lhadhazy
+/CODE_OF_CONDUCT.md                 @lhadhazy
