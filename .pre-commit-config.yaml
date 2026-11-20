@@ -1,0 +1,27 @@
+# The checks CI's lint step makes, run before each commit: `pip install pre-commit`
+# (or `prek`), then `pre-commit install` once. Versions match the pins in
+# pyproject.toml's dev extra, so a hook and CI never disagree about a file.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.2
+    hooks:
+      - id: ruff
+      - id: ruff-format
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
+        # Reads [tool.codespell] in pyproject.toml for what it skips.
+        additional_dependencies: ["tomli; python_version < '3.11'"]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+        exclude: ^tests/fixtures/
+      - id: trailing-whitespace
+        exclude: ^tests/fixtures/

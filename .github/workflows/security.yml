@@ -1,0 +1,51 @@
+name: Security
+
+# Two checks CI's test job does not make. zizmor reads the workflows themselves,
+# because release.yml can publish to PyPI and a workflow is code that runs with
+# that power. pip-audit reads what a user installs, weekly as well as on every
+# change, because a dependency becomes vulnerable without anything here moving.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  workflows:
+    name: Workflows (zizmor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      - run: pip install zizmor==1.32.0
+      # Offline: the audits that need the network look up advisories for the
+      # pinned actions, and a lookup failing should not read as a finding.
+      - run: zizmor --offline .github/workflows/
+
+  dependencies:
+    name: Dependencies (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      # What a user installs: the package has no extras but `dev`, and the
+      # runtime comes without its `run` extra. In an environment of its own, so
+      # the audit sees the server's dependencies and not CI's tools.
+      - run: |
+          python -m venv /tmp/audit
+          /tmp/audit/bin/pip install --upgrade pip
+          /tmp/audit/bin/pip install "." pip-audit==2.10.1
+      - run: /tmp/audit/bin/pip-audit --skip-editable

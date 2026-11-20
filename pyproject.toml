@@ -22,7 +22,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6", "httpx>=0.27"]
+dev = [
+    "pytest>=8",
+    # Pinned exactly, unlike everything else here: a ruff release changes which
+    # rules fire, and with a floor CI installs whatever is newest, so `main` can
+    # fail with no change in this repository. The pre-commit hook uses the same
+    # version. Bump it on purpose, with any fixes in the same commit.
+    "ruff==0.17.2",
+    # Pinned for the same reason: a new dictionary flags new words.
+    "codespell==2.4.3",
+    "httpx>=0.27",
+]
 
 [project.scripts]
 cordata-catalog-mcp = "catalog_mcp.__main__:main"
@@ -42,6 +52,11 @@ catalog_mcp = ["columns.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.codespell]
+# Run by CI and the pre-commit hook. The fixtures are events a runtime release
+# emitted, kept as written; `runtime/` is the clone CI's columns job makes.
+skip = "./.venv,./.git,./.jj,./build,./dist,./runtime,./tests/fixtures,*.json,*.ndjson,*.egg-info"
 
 [tool.ruff]
 line-length = 100

@@ -1,0 +1,42 @@
+name: DCO
+
+# Every commit in a pull request carries `Signed-off-by:` with its author's own
+# name and email: the contributor's statement, under the Developer Certificate
+# of Origin (https://developercertificate.org), that they may contribute it
+# under this project's licence. `git commit -s` adds it. See CONTRIBUTING.md.
+#
+# Read from the pull request's own commits through the API rather than with a
+# checkout, so no code from the pull request runs here.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  dco:
+    name: DCO
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every commit is signed off by its author
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          missing=0
+          while IFS=$'\t' read -r sha name email; do
+            body=$(gh api "repos/$REPO/commits/$sha" --jq .commit.message)
+            if ! grep -qiF "Signed-off-by: $name <$email>" <<<"$body"; then
+              echo "::error::$sha by $name <$email> has no matching Signed-off-by line"
+              missing=$((missing + 1))
+            fi
+          done < <(gh api --paginate "repos/$REPO/pulls/$PR/commits" \
+                     --jq '.[] | [.sha, .commit.author.name, .commit.author.email] | @tsv')
+          if [ "$missing" -gt 0 ]; then
+            echo "$missing commit(s) without a sign-off. Add one with: git commit --amend -s, or git rebase --signoff main"
+            exit 1
+          fi
+          echo "every commit is signed off by its author"
